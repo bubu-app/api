@@ -1,0 +1,70 @@
+name: Deploy to Amazon ECS - DEVELOP
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set DATABASE_NAME based on branch
+        id: set-database-name
+        run: |
+          if [[ $GITHUB_REF == "refs/heads/main" ]]; then
+            echo "DATABASE_NAME=prod" >> $GITHUB_ENV
+          else
+            echo "DATABASE_NAME=develop" >> $GITHUB_ENV
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: bubu-container-registry
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg DATABASE_NAME="${{ secrets.DATABASE_NAME }}" \
+            --build-arg DATABASE_PORT="${{ secrets.DATABASE_PORT }}" \
+            --build-arg DATABASE_HOST="${{ secrets.DATABASE_HOST }}" \
+            --build-arg DATABASE_USERNAME="${{ secrets.DATABASE_USERNAME }}" \
+            --build-arg DATABASE_PASSWORD="${{ secrets.DATABASE_PASSWORD }}" \
+            --build-arg JWT_SECRET="${{ secrets.JWT_SECRET }}" \
+            --build-arg GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f Dockerfile.develop .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: bubu-task-container
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: develop
+          cluster: bubu
+          wait-for-service-stability: true
