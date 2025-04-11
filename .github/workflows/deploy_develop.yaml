@@ -38,7 +38,7 @@ jobs:
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: bubu-container-registry
+          ECR_REPOSITORY: develop/bubu-container-registry
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build \
