@@ -4,6 +4,7 @@ import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { dataSourceOptions } from "./database/datasource";
 import { JwtModule } from "@nestjs/jwt";
+import { HealthChecksModule } from "./modules/health-checks/health-checks.module";
 
 const ENVIRONMENT = process.env.ENVIRONMENT;
 const JWT_SECERT = process.env.JWT_SECRET;
@@ -21,6 +22,7 @@ const JWT_SECERT = process.env.JWT_SECRET;
     }),
     TypeOrmModule.forRoot(dataSourceOptions),
     UsersModule,
+    HealthChecksModule,
   ],
   controllers: [],
   providers: [],
